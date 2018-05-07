@@ -25,8 +25,8 @@ train_fox <- readRDS(file = "data/processed/train_fox.rds")
 
 ### @realDonaldTrump
 Important dates: <br>
-1. Trump announced candidacy for president June 16, 2015 <br>
-2. Trump became president on Jan 20, 2017
+1. Trump announced candidacy for president June 16, 2015. <br>
+2. Trump became president on Jan 20, 2017.
 
 <br>
 
