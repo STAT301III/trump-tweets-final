@@ -1,0 +1,26 @@
+---
+title: "Data Memo"
+author: "Tiffany Jeung"
+date: "April 21, 2018"
+output: html_document
+---
+### Final Project Data Memo
+
+<br>
+
+#### Dataset
+
+I will be using a dataset of Donald Trump's tweets (@realDonaldTrump) from 5/4/2009 - 8/10/2017, and may be extend the dataset to include tweets from 8/10/2017 to present day. The dataset can be found, thanks of Michael Kearney and his package `rtweet` here: https://bit.ly/2Ha0UEF. Michael Kearney's Github can be found https://github.com/mkearney. Given Donald Trump's well-documented loyalty to Fox & Friends, I anticipate joining this dataset with the Twitter feed of Fox&Friends to look for similarities in content (similarly acquired through Kearney's `rtweet`). 
+
+<br>
+
+#### Research Questions
+
+I am interested in predicting whether tweets will be popular vs not. I will first set a threshold to define popularity based on user engagement, such as likes and retweets, then classify tweets accordingly. Retweets would be To classify tweets, I'll consider predictors such as use of @ tags, all-caps, links to outside content, correlation with Fox&Friends, topic, etc. Time of data and - if available - geographical information may also be interesting.
+
+<br>
+
+
+#### Potential Data Issues
+
+This dataset will require cleaning to extract information such as number of @ tags, links, all-caps, etc used within tweets. Creating a dataset from 5/4/2009 to present day will involve merging Kearney's original dataset with recently acquired data, which will take extra time but should not be an issue. Of the 33080 tweets posted from 5/4/2009 - 8/10/2017, 1302 lack retweet and favorited data. Combined with the fact that these 1302 tweets are spread out across various years and that I am not sure why the data is incomplete, it will be a challenge to reconcile this data in a way that isn't simply discarding it. Comparing regular tweets to Tweetstorms while classifying tweets, as well as standardizing any changes in Tweets when Twitter regulation switched from 140 to 280 characters may be a challenge. Another challenge may include accurately assessing a correlation between the tweets of Fox and Friends vs Trump. Trump is a loyal viewer, but the topics broadcast on TV may not correlate in a timely fashion with the Twitter account of Fox&Friends. 
