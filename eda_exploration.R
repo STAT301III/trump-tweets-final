@@ -397,3 +397,4 @@ ggplot(freq_mentions_fox) +
 
 
 
+
