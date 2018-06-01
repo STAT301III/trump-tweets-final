@@ -5,39 +5,84 @@ library(tree)
 library(MASS)
 library(randomForest)
 library(gbm)
+library(ISLR) # for polynomail regression
 
-library(tidytext)
-library(tm)
 
-# read-in dataset
-trump <- readRDS("data/processed/train_trump.rds")
-final_test_trump <- readRDS("data/processed/test_trump.rds")
+## Adjusted because of script issues
+trump_all <- readRDS("data/processed/trump_all.rds")
 
-# Set aside 15 percent of training set as "test" set in an 80/20 split
-set.seed(117)
+set.seed(10)
 
-# Select random indices
-train_index <- sample(1:nrow(trump), 0.8 * nrow(trump))
-test_index <- setdiff(1:nrow(trump), train_index)
+# Of 36242 obs, select random indices to split into test and training
+train_index <- sample(1:nrow(trump_all), 0.8 * nrow(trump_all))
+test_index <- setdiff(1:nrow(trump_all), train_index)
+
+# Pull observations of selected indices 
+# Final test data (7249 observations) not touched until final model evaluation
+train_trump <- trump_all[train_index,]
+final_test_trump <- trump_all[test_index,]
+
+# Of 28993 obs of training data, set aside 80% for training and 20% for testing during modeling.
+train_index <- sample(1:nrow(train_trump), 0.8 * nrow(train_trump))
+test_index <- setdiff(1:nrow(train_trump), train_index)
 
 # Pull observations of selected indices
-train_trump <- trump[train_index,]
-test_trump <- trump[test_index,]
+# Leaves 23194 obs in training
+# Leaves 5799 obs in testing
+train_trump <- train_trump[train_index,] 
+test_trump <- train_trump[test_index,]
+
+# Add tweet id column to each
+train_trump <- train_trump %>%
+  rowid_to_column("tweet_id")
+
+test_trump <- test_trump %>%
+  rowid_to_column("tweet_id")
+
+final_test_trump <- final_test_trump %>% 
+  rowid_to_column("tweet_id")
+
+range(trump_all$created_at, na.rm = TRUE)
 
 
-# retweet_count -----------------------------------------------------------
+# predicting retweet_count (regression) -----------------------------------------------------------
+
+# Note range of retweet_count when considering MSE
+# from 0 to 370245
+range(train_trump$retweet_count, na.rm = TRUE)
 
 # Multiple Linear Regression
 train_trump_num <- train_trump %>%
-  dplyr::select(is_retweet, favorite_count, exclam_count, all_caps_count, uppercase_first_count)
+  dplyr::select(is_retweet, favorite_count, exclam_count, all_caps_count, uppercase_first_count, retweet_count) %>% 
+  filter(!is.na(favorite_count) & !is.na(retweet_count))
 
 lm_fit <- lm(retweet_count ~ is_retweet + favorite_count + exclam_count + all_caps_count + uppercase_first_count, data = train_trump)
 
 # Very high MSE
 mlm_sm <- summary(lm_fit)
-mean(mlm_sm$residuals^2)
+mlm_MSE <- mean(mlm_sm$residuals^2)
 
-# Decision trees
+
+# Remove missing values of favorite for prediction
+poly_fit1 <- lm(retweet_count ~ poly(favorite_count, 3) + is_retweet + exclam_count + all_caps_count + uppercase_first_count, data = train_trump_num)
+# store model fit summary
+# RSE = 3412
+poly_sum <- summary(poly_fit)
+
+# Different polynomial?
+poly_fit2 <- lm(retweet_count ~ poly(favorite_count, 4) + is_retweet + exclam_count + all_caps_count + uppercase_first_count, data = train_trump_num)
+# RSE = 3388
+summary(poly_fit2)
+
+anova(poly_fit1, poly_fit2)
+
+# RMSE
+#sqrt(sum(residuals(poly_sum)^2) / df(poly_sum))
+# check page 291? 
+
+
+
+### -- Decision trees -- ###
 
 # Remove values with missing retweet_count values
 # 804 values from training set
@@ -86,7 +131,7 @@ boost.trump <- gbm(retweet_count ~ is_retweet + favorite_count + exclam_count + 
 summary(boost.trump)
 
 yhat.boost <- predict(boost.trump, newdata = test_trump_rt, n.trees = 5000)
-boosted1_mse <- mean((yhat.boost - test_trump$retweet_count)^2, na.rm = TRUE)
+boosted1_mse <- mean((yhat.boost - test_trump_rt$retweet_count)^2, na.rm = TRUE)
 
 # What if we take out favorite count, since it seems overwhelmingly influential?
 boost.trump2 <- gbm(retweet_count ~ is_retweet + exclam_count + all_caps_count + uppercase_first_count, data = train_trump_rt, distribution = "gaussian", n.trees = 5000)
@@ -95,8 +140,8 @@ boost.trump2 <- gbm(retweet_count ~ is_retweet + exclam_count + all_caps_count +
 summary(boost.trump2)
 
 # However, it's a terrible predictor of user engagement (rewtweet + favorite counts)
-yhat.boost2 <- predict(boost.trump2, newdata = test_trump, n.trees = 5000)
-boosted2_mse <- mean((yhat.boost2 - test_trump$retweet_count)^2, na.rm = TRUE)
+yhat.boost2 <- predict(boost.trump2, newdata = test_trump_rt, n.trees = 5000)
+boosted2_mse <- mean((yhat.boost2 - test_trump_rt$retweet_count)^2, na.rm = TRUE)
 
 ### Random forests?
 rf.trump <- randomForest(retweet_count ~ is_retweet + favorite_count + exclam_count + all_caps_count + uppercase_first_count, data = train_trump_rt, mtry = 2, importance = TRUE)
@@ -117,7 +162,7 @@ rf.trump2 <- randomForest(retweet_count ~ is_retweet + exclam_count + all_caps_c
 yhat_rf2 <- predict(rf.trump2, newdata = test_trump_rt)
 rf2_mse <- mean((yhat_rf2 - test_trump_rt$retweet_count)^2)
 
-errors <- tribble(~boosted1, ~boosted2, ~rf1, ~rf2, boosted1_mse, boosted2_mse, rf1_mse, rf2_mse)
+errors <- tribble(~boosted1, ~boosted2, ~rf1, ~rf2, ~mlm, boosted1_mse, boosted2_mse, rf1_mse, rf2_mse, mlm_MSE)
 
 knitr::kable(errors)
 # try standard deviations as well since it's nicer to compare
@@ -130,52 +175,12 @@ knitr::kable(errors)
 
 # USE NEURAL NETS WITH THE ACTUAL WORDS TO TRY AND PREDICT
 
-#  classification ---------------------------------------------------------
-
-## predict whether trump will use all-caps or not
 
 
 
 
-# sentiment analysis ------------------------------------------------------
 
-trump_text <- train_trump %>% 
-  dplyr::select(text, created_at, favorite_count, retweet_count)
-
-# FROM DATACAMP
-# https://www.datacamp.com/community/tutorials/R-nlp-machine-learning
-
-# function to expand contractions in an English-language source
-fix.contractions <- function(doc) {
-  # "won't" is a special case as it does not expand to "wo not"
-  doc <- gsub("won't", "will not", doc)
-  doc <- gsub("can't", "can not", doc)
-  doc <- gsub("n't", " not", doc)
-  doc <- gsub("'ll", " will", doc)
-  doc <- gsub("'re", " are", doc)
-  doc <- gsub("'ve", " have", doc)
-  doc <- gsub("'m", " am", doc)
-  doc <- gsub("'d", " would", doc)
-  # 's could be 'is' or could be possessive: it has no expansion
-  doc <- gsub("'s", "", doc)
-  return(doc)
-}
-
-# fix (expand) contractions
-trump_text$text <- sapply(trump_text$text, fix.contractions)
-
-# function to remove special characters
-removeSpecialChars <- function(x) gsub("[^a-zA-Z0-9 ]", " ", x)
-# remove special characters
-trump_text$text <- sapply(trump_text$text, removeSpecialChars)
-
-# convert everything to lower case
-trump_text$text <- sapply(trump_text$text, tolower)
-
-# remove stopwords and unnest 
-trump_text_filtered <- trump_text %>%
-  unnest_tokens(word, text) %>% 
-  anti_join(stop_words)
+ 
 
 
 
