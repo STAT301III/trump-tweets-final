@@ -1,0 +1,100 @@
+---
+title: "Final Report"
+author: "Tiffany Jeung"
+date: "June 1, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load packages
+library(tidyverse)
+library(kableExtra)
+```
+
+## Introduction
+
+The main objective of this project was to explore Trump's tweets and to experiment with different models to predict retweet count. This is a final for STATS 301-3 and is meant to tie together concepts learned from past quarters of the data science sequence. 
+
+## Data Overview
+
+The dataset of Trump's tweets, provided by Michael Kearney and his `rtweet` package, included a total of 36242 observations (individual tweets). This ranged from May 4, 2009 to May 28, 2018. I originally intended to extend the dataset to June, but recently ran into issues with Twitter's API and could not retrieve the most recent tweets. 
+
+In separating data into test and training sets, I held out 20% as a final training set (`final_test_trump`), then used the remaining 80% for training and testing models (`train_trump` and `test_trump`). This left three datasets: `train_trump` (60%), `test_trump` for use with the training set (20%) and `final_test_trump` (20%) for final model evaluation.
+
+The context of the data provides a challenge. Since 2009, Trump has shifted priorities across a variety of verticals, from real estate to the reality television show, The Apprentice, to the presidency today. The growth of his Twitter presence over time means that in addition to a variety of subjects, the data includes a wide variety of tweets from the less popular to the viral. 
+
+![User engagement by month since announcement of candidacy](C:\Users\tjeung\Dropbox\stats_3013\final\final_project\results\engagement_since_candidacy.png)
+
+The variety of the data, however, also makes it difficult to discern successful tweets - a tweet considered popular in 2013 may be dwarfed by tweets after Trump's declaration to run for president. 
+
+Looking solely at the frequency of words used, the vast majority seem related to the presidency.
+
+![](C:\Users\tjeung\Dropbox\stats_3013\final\final_project\results\top_freq_words.png)
+
+In looking at the data, it was also interesting to consider what elements lined up with popular commentary on Trump. Tweet data confirms his preference for short, punchy language - 
+
+![](C:\Users\tjeung\Dropbox\stats_3013\final\final_project\results\word_length_plot.png)
+
+Unsuprisingly, there was much missing data from the original Trump tweet dataset. Due to the sheer quantity of tweets, I decided to filter out missing values when relevant. For example, in removing missing values from the `retweet_count` column to use random forests, 804 observations of 23194 in the training set were removed. If the data was more complete, looking at device used (computer vs mobile) or geolocation would have been interesting to analyze. 
+
+## Analysis
+
+The main research question was to predict tweet popularity, which was generally captured by retweet count and favorite count. Originally, I planned to set a threshold of popularity and classify tweets as popular or not popular, but opted to instead predict retweet count. This metric of user engagement turned the research question into regression rather than classification. I did this, as I struggled to define popularity as a quantitative value. 
+
+I also originally sought to investigate the relationship between the tweets of foxandfriends and realDonaldTrump, but ended up focusing primarily on the first research question.
+
+As for how I explored the data: Michael Kearney's rtweet package already extracted a significant amount of information regarding Trump's tweets, the most relevant of which included the text of each tweet, number of retweets, number of favorites, and date and time of creation. Although interesting, I decided to not include other values such as media urls used, as I was more interested in the language used by Trump.
+
+Predicting for retweet count falls under regression, as it falls under a continuous range from 0 to 370245 retweets. I first selected the columns most relevant to Trump's language and audience engagement, such as favorite count and retweet count. Using the stringr package to prepare the data, I extracted information such as exclamation use count (as both a binary variable and a count) and words that were typed in all-caps. I also extracted words with the first letter capitalized, as Trump is known to capitalize the first letter of words, regardless of whether the word is gramatically a proper noun. Looking back, I could have also created a binary variable to indicate whether Trump included a link to an external page, as this may or may not have affected audience clicks. 
+
+After this, I fitted a first round of models, including a linear regression, polynomial regression and various decision trees (regression tree, gradient boosting, and random forests). 
+
+Out of all the methods, random forests and polynomial regression with higher degrees achieved the best test MSE. The range of retweet counts goes from 0 to 370,245 retweets over the course of eight years of tweets, so test MSE may generally look high but in context be acceptable. However, with increasing degrees of polynomial regression, overfitting is a concern. 
+
+These models were fitted with the following predictors to predict `retweet_count`:
+`is_retweet`, `favorite_count`, `exclam_count`, `all_caps_count`, `uppercase_first_count`
+
+```{R, echo = FALSE}
+read_rds("results/all_errors.rds") %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Taking a closer look at random forests, `favorite_count` was the strongest predictor of `retweet_count`. Once `favorite_count` was not considered, `is_retweet` was the strongest predictor. The variables describing text did not significantly define the MSE. However, without `favorite_count`, test MSE worsened significantly.
+
+![](C:\Users\tjeung\Dropbox\stats_3013\final\final_project\results\rf_model_1.png)
+
+However, predicting for retweets might be more successful with the content of the tweets themselves, which brought me to sentiment analysis. 
+
+To prepare the data, I adapted Debbie Liske's Datacamp's tutorial on Price lyrics, which can be found at https://www.datacamp.com/community/tutorials/R-nlp-machine-learning. This expanded contractions, changed the text to lowercase and removed special characters and useless words such as "http". It also used the tidytext package to tokenize the texts of the tweets. From there, I took the most frequently used words as "topics" and created a topics dataset that coded each tweet with binary variables to indicate a topic was included (1) or was not included (0). These topics were the top ten words used by trump in tweets, barring "trump" itself (which was number one). 
+
+From there, I applied best performing models across a few different types of regression to the topics dataset to see if this additional context would improve retweet predictions.
+
+These pseudo-topic variables did not seem to significantly help predict `retweet_count`. However, my current method is certainly limited, as I only took the top ten most frequently mentioned words as topics.
+
+The sentiment-analysis topic datasets used the following predictors to predict `retweet_count`:
+`favorite_count`, `exclam_count`, `all_caps_count`, `amp`, `president`, `donald`, `people`, `obama`, `america`, `country`, `time`, `run`, `trump2016`
+
+```{R, echo = FALSE}
+read_rds("results/topics_errors.rds") %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Finally, I tested a variety of the best performing methods on the final held-out test data. 
+
+```{R, echo = FALSE}
+read_rds("results/final_test_err.rds") %>% 
+  kable %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Future Consideration
+
+A better model could include deeper sentiment analysis. In lieu of actually assigning topics to each tweet, I created the topics datasets (topic_trump_train/test/test_final) to capture the most common topics. Of course, this isn't thorough - ideally, the data would be better prepared to assign a topic to each tweet. From there, a model could potentially better predict which topics (or combination of topics) tend to be most popular. 
+
+Pairing this with more specific emotional tags per word (happy, sad, angry) could also help identify what kinds of emotions are invoked for particular topics to maximize audience response. Next questions could investigate whether Trump's most popular tweets tend to be more controversial, happy, etc. 
+
+With much deeper sentiment analysis (like proper one-hot encoding of words for the text of each tweet) combined with neural networks, it would be interesting to then use recurrent neural networks to generate text - or in this case tweets - not unlike the twitter bot, [DeepDrumpf](https://twitter.com/deepdrumpf?lang=en)
